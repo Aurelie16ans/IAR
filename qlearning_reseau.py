@@ -45,11 +45,15 @@ if __name__ == "__main__":
     optim=torch.optim.SGD(Q.parameters(), lr=0.01)
     a=torch.tensor(0,dtype=torch.float32)
     print(Q(a.unsqueeze(0)))
+    start_state = 0
+    end_state = g.state_space_size
     for _ in tqdm.trange(n_it):
-        q_s_a=[]
-        targets=[]
+        s_list=[]
+        a_list=[]
+        target_list=[]
+        s= torch.tensor(1, dtype=torch.float32).random_(start_state,end_state)
         for i in range(n_batch):
-            s=g.reset()
+            
             done=False
             td_errors=[]
             print(s)
@@ -61,18 +65,19 @@ if __name__ == "__main__":
             """"
             td_errors.append((s,a,target-Q(s)[a]))
             """
+            s_list.append(s)
+            a_list.append(a)
             s=s_prime
             if done:
                 break
             
-            q_s_a.append(Q(torch.tensor(s,dtype=torch.float32).unsqueeze(0))[a])
-            targets.append(target)
+            target_list.append(target)
             """    
             for s,a,err in td_errors:
                 Q(s)[a] += lr*err
             """
-        targets_tensor = torch.tensor(targets,dtype=torch.float32)
-        q_s_a_tensor = torch.tensor(q_s_a)
+        target_tensor = torch.tensor(target_list,dtype=torch.float32)
+        
         loss=nn.functional.mse_loss(q_s_a_tensor, targets_tensor)
         print(loss)
         optim.zero_grad()
