@@ -36,26 +36,28 @@ if __name__ == "__main__":
     n_a = g.action_space_size
     s = g.reset()
     discount = 0.9
-    n_it = 500
+    n_it = 100
     epsilon=0.01
-    max_t = 200
+    max_t = 500
     lr=0.1
-    n_size_dataset=32
+    n_size_dataset=100 #nbr de samples ajoute au dataset a chaque iteration
     
     Q = MyMLP(1,32,4)
     optim=torch.optim.SGD(Q.parameters(), lr=0.01)
 
-    #Q_prime=MyMLP(1,32,4)
+    Q_prime=MyMLP(1,32,4)
 
     a=torch.tensor(0,dtype=torch.float32)
     start_state = 0
     end_state = g.state_space_size
 
     loss_list=[]
+
+    s_list = []   #en fait on garde les samples produits lors des autres iterations
+    a_list = []
+    target_list = []
     for _ in tqdm.trange(n_it):
-        s_list=[]
-        a_list=[]
-        target_list=[]
+
 
         for i in range(n_size_dataset):   #fait le dataset
             s = torch.tensor(1, dtype=torch.float32).random_(start_state, end_state)
@@ -65,7 +67,7 @@ if __name__ == "__main__":
             a=Q(torch.tensor(s,dtype=torch.float32).unsqueeze(0)).argmax() if torch.rand((1,)) < epsilon else torch.randint(0,n_a,(1,))
             #print(a)
             s_prime, r, done = g.step(a)
-            target=0 if done else Q(torch.tensor(s_prime,dtype=torch.float32).unsqueeze(0)).max()
+            target=0 if done else Q_prime(torch.tensor(s_prime,dtype=torch.float32).unsqueeze(0)).max()
             target = r +discount*target
             """"
             td_errors.append((s,a,target-Q(s)[a]))
@@ -97,7 +99,10 @@ if __name__ == "__main__":
             loss.backward()
             optim.step()
 
-        prv_loss = loss / len(dataset)
+
+        Q_prime.load_state_dict(Q.state_dict()) #copie les poids maj de Q dans Q_prime (fixe sur une iteration)
+
+        prv_loss=loss/len(dataset)
         loss_list.append(prv_loss)
 
     plt.plot(range(0, n_it), loss_list)
