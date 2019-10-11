@@ -44,6 +44,9 @@ if __name__ == "__main__":
     
     Q = MyMLP(1,32,4)
     optim=torch.optim.SGD(Q.parameters(), lr=0.01)
+
+    #Q_prime=MyMLP(1,32,4)
+
     a=torch.tensor(0,dtype=torch.float32)
     start_state = 0
     end_state = g.state_space_size
@@ -62,7 +65,7 @@ if __name__ == "__main__":
             a=Q(torch.tensor(s,dtype=torch.float32).unsqueeze(0)).argmax() if torch.rand((1,)) < epsilon else torch.randint(0,n_a,(1,))
             #print(a)
             s_prime, r, done = g.step(a)
-            target=0 if done else Q(torch.tensor(s_prime,dtype=torch.float32).unsqueeze(0)).argmax()
+            target=0 if done else Q(torch.tensor(s_prime,dtype=torch.float32).unsqueeze(0)).max()
             target = r +discount*target
             """"
             td_errors.append((s,a,target-Q(s)[a]))
