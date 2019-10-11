@@ -13,6 +13,7 @@ from gridworld import GridWorld
 #from environment import Environment
 import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 class MyMLP(nn.Module):
     def __init__(self, size_in, size_inter, size_out):
@@ -35,30 +36,31 @@ if __name__ == "__main__":
     n_a = g.action_space_size
     s = g.reset()
     discount = 0.9
-    n_it = 1000
+    n_it = 500
     epsilon=0.01
     max_t = 200
     lr=0.1
-    n_batch=32
+    n_size_dataset=32
     
     Q = MyMLP(1,32,4)
     optim=torch.optim.SGD(Q.parameters(), lr=0.01)
     a=torch.tensor(0,dtype=torch.float32)
-    print(Q(a.unsqueeze(0)))
     start_state = 0
     end_state = g.state_space_size
+
+    loss_list=[]
     for _ in tqdm.trange(n_it):
         s_list=[]
         a_list=[]
         target_list=[]
-        s= torch.tensor(1, dtype=torch.float32).random_(start_state,end_state)
-        for i in range(n_batch):
-            
+
+        for i in range(n_size_dataset):   #fait le dataset
+            s = torch.tensor(1, dtype=torch.float32).random_(start_state, end_state)
             done=False
             td_errors=[]
-            print(s)
+            #print(s)
             a=Q(torch.tensor(s,dtype=torch.float32).unsqueeze(0)).argmax() if torch.rand((1,)) < epsilon else torch.randint(0,n_a,(1,))
-            print(a)
+            #print(a)
             s_prime, r, done = g.step(a)
             target=0 if done else Q(torch.tensor(s_prime,dtype=torch.float32).unsqueeze(0)).argmax()
             target = r +discount*target
@@ -67,20 +69,33 @@ if __name__ == "__main__":
             """
             s_list.append(s)
             a_list.append(a)
-            s=s_prime
-            if done:
-                break
+            #s=s_prime   = pas besoin vu qu'on prend des states aleatoires
+            #if done:
+             #   break    : idem
             
             target_list.append(target)
-            """    
-            for s,a,err in td_errors:
-                Q(s)[a] += lr*err
-            """
-        target_tensor = torch.tensor(target_list,dtype=torch.float32)
-        
-        loss=nn.functional.mse_loss(q_s_a_tensor, targets_tensor)
-        print(loss)
-        optim.zero_grad()
-        loss.backward()
-        optim.step()
-        
+
+
+        s_tensor=torch.tensor(s_list, dtype=torch.float32)
+        a_tensor=torch.tensor(a_list, dtype=torch.long)
+        target_tensor=torch.tensor(target_list, dtype=torch.float32)
+        dataset = torch.utils.data.TensorDataset(s_tensor, a_tensor, target_tensor)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=32)
+
+        for i,(s, a, target) in  enumerate(loader):
+            out=Q(s.unsqueeze(1))
+            out_action=[]
+            for i in range(len(a)):
+                out_action.append(out[i, a[i]])
+            out_action_tensor=torch.tensor(out_action, dtype=torch.float32, requires_grad=True)
+            loss=nn.functional.mse_loss(out_action_tensor, target)
+            print("Loss   ",loss)
+            optim.zero_grad()
+            loss.backward()
+            optim.step()
+
+        prv_loss = loss / len(dataset)
+        loss_list.append(prv_loss)
+
+    plt.plot(range(0, n_it), loss_list)
+    plt.savefig("loss.png")
