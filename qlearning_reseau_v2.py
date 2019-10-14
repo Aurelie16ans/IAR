@@ -21,12 +21,12 @@ class Perceptron(nn.Module):
         super().__init__()
         self.in_to_hidden = nn.Linear(observation_space_size, hidden_dim)
         self.hidden_to_out = nn.Linear(hidden_dim, action_space_size)
-        
+
     def forward(self,observation):
         h = self.in_to_hidden(observation)
         h = nn.functional.relu(h)
         return self.hidden_to_out(h)
-    
+
 
 
 g=GridWorld(4,4)
@@ -48,7 +48,7 @@ def sample_action(env, z, Q_value, epsilon):
         return random.randint(0,n_a-1)
     else:
         return Q_value(torch.tensor(z, dtype=torch.float).unsqueeze(0)).argmax().item() # renvoit une action aleatoire
-    
+
 
 def sample_trajectory(replay_memory, Q_value, epsilon):
     z = g.reset() #observation
@@ -64,10 +64,11 @@ def sample_trajectory(replay_memory, Q_value, epsilon):
         next_z, r, done = g.step(a)
         cumul += r
         replay_memory.append((z,a,r,next_z,done))
+        print("Len ", len(replay_memory))
         if done:
             break
     return cumul
-        
+
 def train():
     replay_memory = collections.deque(maxlen=MEM_SIZE)
     epsilon = 1
@@ -75,17 +76,19 @@ def train():
     with tqdm.trange(MAX_ITER) as progress_bar:
         for it in progress_bar:
             cumul = sample_trajectory(replay_memory, Q_value, epsilon)
-            
             n = len(replay_memory)
-            if n < BATCH_SIZE:
+            print("n", n)
+
+            if (n // BATCH_SIZE) < BATCH_SIZE:
                 indices = list(range(n))
-            
+                print("IF ")
                 random.shuffle(indices)
                 tot_loss = 0
                 for b in range(n // BATCH_SIZE):
+                    print("For b")
                     batch_z, batch_a, batch_r, batch_nxt, batch_done = zip(
-                            *(replay_memory[i] for i in indices[b * BATCH_SIZE:(b+1) * BATCH_SIZE])) 
-                    # sans le zip, on a une liste de tuples (s,a,r,s',done), le fait de faire zip permet 
+                            *(replay_memory[i] for i in indices[b * BATCH_SIZE:(b+1) * BATCH_SIZE]))
+                    # sans le zip, on a une liste de tuples (s,a,r,s',done), le fait de faire zip permet
                     #d'avoir une liste de s, une liste de a, une liste de s', une liste de done...
                     # le * permet d'exploser les listes initiales pour que le zip fonctionne7
                     batch_z = torch.tensor(batch_z).float()
@@ -102,28 +105,31 @@ def train():
                     batch_target = batch_r + DISCOUNT*target_Q_value(batch_nxt).max(1, keepdim=True)[0]
                     batch_target[batch_done] = 0
                     print(batch_target)
-                    
+
                     batch_qval = Q_value(batch_z).gather(1, batch_a)
                     loss = nn.functional.mse_loss(batch_qval, batch_target.detach())
                     tot_loss += loss.item()
                     plot_tot_loss.append(tot_loss)
-                    
+                    print("plot_tot_loss inter", plot_tot_loss)
+
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
-                    
+
             if it % FREEZE_PERIOD == FREEZE_PERIOD - 1:
                 temp = target_Q_value.state_dict()
                 target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
                 Q_value.load_state_dict(temp)
-                
+
             epsilon = 1 - it / MAX_ITER # pas optimisé
-            
+
     return plot_tot_loss
-            
-            
-             
+
+
+
 
 plot_tot_loss = train()
+print("plot_tot_loss", plot_tot_loss)
 plt.plot(plot_tot_loss)
+plt.savefig("Loss_neural_network.png")
