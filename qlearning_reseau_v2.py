@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 MEM_SIZE = 1000
 T_MAX = 200
 HIDDEN_DIM = 128
-MAX_ITER = 1000
+MAX_ITER = 500
 BATCH_SIZE = 64
 DISCOUNT = 0.9
 LEARNING_RATE = 0.0001
@@ -40,7 +40,7 @@ target_Q_value = Perceptron(1, HIDDEN_DIM, n_a)
 target_Q_value.load_state_dict(Q_value.state_dict()) #○ copie des param
 
 optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
-print(Q_value)
+#print(Q_value)
 
 
 def sample_action(env, z, Q_value, epsilon):
@@ -64,7 +64,8 @@ def sample_trajectory(replay_memory, Q_value, epsilon):
         next_z, r, done = g.step(a)
         cumul += r
         replay_memory.append((z,a,r,next_z,done))
-        print("Len ", len(replay_memory))
+        z=next_z
+        #print("Len ", len(replay_memory))
         if done:
             break
     return cumul
@@ -77,24 +78,22 @@ def train():
         for it in progress_bar:
             cumul = sample_trajectory(replay_memory, Q_value, epsilon)
             n = len(replay_memory)
-            print("n", n)
 
-            if (n // BATCH_SIZE) < BATCH_SIZE:
+            if  n >BATCH_SIZE:
                 indices = list(range(n))
-                print("IF ")
                 random.shuffle(indices)
                 tot_loss = 0
                 for b in range(n // BATCH_SIZE):
-                    print("For b")
+                    #print("For b")
                     batch_z, batch_a, batch_r, batch_nxt, batch_done = zip(
                             *(replay_memory[i] for i in indices[b * BATCH_SIZE:(b+1) * BATCH_SIZE]))
                     # sans le zip, on a une liste de tuples (s,a,r,s',done), le fait de faire zip permet
                     #d'avoir une liste de s, une liste de a, une liste de s', une liste de done...
                     # le * permet d'exploser les listes initiales pour que le zip fonctionne7
-                    batch_z = torch.tensor(batch_z).float()
+                    batch_z = torch.tensor(batch_z).float().unsqueeze(1)
                     batch_a = torch.tensor(batch_a).unsqueeze(1)
-                    batch_r = torch.tensor(batch_r).unsqueeze(1)
-                    batch_nxt = torch.tensor(batch_nxt).float()
+                    batch_r = torch.tensor(batch_r).unsqueeze(1).float()
+                    batch_nxt = torch.tensor(batch_nxt).unsqueeze(1).float()
                     batch_done = torch.tensor(batch_done).unsqueeze(1)
                     """
                     print(batch_a)
@@ -104,17 +103,18 @@ def train():
                     """
                     batch_target = batch_r + DISCOUNT*target_Q_value(batch_nxt).max(1, keepdim=True)[0]
                     batch_target[batch_done] = 0
-                    print(batch_target)
+                    #print(batch_target)
 
                     batch_qval = Q_value(batch_z).gather(1, batch_a)
                     loss = nn.functional.mse_loss(batch_qval, batch_target.detach())
                     tot_loss += loss.item()
-                    plot_tot_loss.append(tot_loss)
-                    print("plot_tot_loss inter", plot_tot_loss)
+
+                    #print("plot_tot_loss inter", plot_tot_loss)
 
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
+                plot_tot_loss.append(tot_loss / (n // BATCH_SIZE))
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
 
             if it % FREEZE_PERIOD == FREEZE_PERIOD - 1:
@@ -130,6 +130,6 @@ def train():
 
 
 plot_tot_loss = train()
-print("plot_tot_loss", plot_tot_loss)
-plt.plot(plot_tot_loss)
+#print("plot_tot_loss", plot_tot_loss)
+plt.plot(range(0,MAX_ITER),plot_tot_loss)
 plt.savefig("Loss_neural_network.png")
