@@ -9,11 +9,11 @@ from matplotlib import pyplot as plt
 MEM_SIZE = 1000
 T_MAX = 200
 HIDDEN_DIM = 128
-MAX_ITER = 500
-BATCH_SIZE = 64
+MAX_ITER = 10000
+BATCH_SIZE = 32
 DISCOUNT = 0.9
 LEARNING_RATE = 0.0001
-FREEZE_PERIOD = 30 # epoch
+FREEZE_PERIOD = 100 # epoch
 
 
 class Perceptron(nn.Module):
@@ -31,6 +31,7 @@ class Perceptron(nn.Module):
 
 g=GridWorld(4,4)
 g.add_start(1,1)
+g.add_goal(3,3)
 n_s = g.state_space_size
 n_a = g.action_space_size
 s = g.reset()
@@ -74,9 +75,12 @@ def train():
     replay_memory = collections.deque(maxlen=MEM_SIZE)
     epsilon = 1
     plot_tot_loss = []
+    plot_cumul=[]
+    cumul=0
     with tqdm.trange(MAX_ITER) as progress_bar:
         for it in progress_bar:
-            cumul = sample_trajectory(replay_memory, Q_value, epsilon)
+            cumul = cumul+sample_trajectory(replay_memory, Q_value, epsilon)
+            plot_cumul.append(cumul)
             n = len(replay_memory)
 
             if  n >BATCH_SIZE:
@@ -122,14 +126,16 @@ def train():
                 target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
                 Q_value.load_state_dict(temp)
 
-            epsilon = 1 - it / MAX_ITER # pas optimisé
+            epsilon = 1 - (it / MAX_ITER) # pas optimisé
 
-    return plot_tot_loss
-
-
+    return plot_tot_loss, plot_cumul
 
 
-plot_tot_loss = train()
+
+
+plot_tot_loss, plot_cumul = train()
 #print("plot_tot_loss", plot_tot_loss)
-plt.plot(range(0,MAX_ITER),plot_tot_loss)
+plt.plot(plot_tot_loss)
 plt.savefig("Loss_neural_network.png")
+plt.plot(plot_cumul)
+plt.savefig("Cumul_neural_network.png")
