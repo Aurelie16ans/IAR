@@ -5,9 +5,10 @@ import torch
 import torch.nn as nn
 import tqdm
 from matplotlib import pyplot as plt
+import numpy as np
 
 MEM_SIZE = 1000
-T_MAX = 200
+T_MAX = 50
 HIDDEN_DIM = 128
 MAX_ITER = 10000
 BATCH_SIZE = 32
@@ -44,6 +45,9 @@ optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
 #print(Q_value)
 
 
+def calculate_epsilon(it):
+    return (-np.arctan(20*(it-MAX_ITER/2)/MAX_ITER)+1.5)/3
+    
 def sample_action(env, z, Q_value, epsilon):
     if random.random() < epsilon:
         return random.randint(0,n_a-1)
@@ -77,9 +81,14 @@ def train():
     plot_tot_loss = []
     plot_cumul=[]
     cumul_test=[]
-    cumul_test.append(sample_trajectory([], Q_value, 0))
-    cumul_test_tot = 0
+    cumul_test_tot = sample_trajectory([], Q_value, 0)
+    cumul_test.append(cumul_test_tot)
+    cumul_non_cumule = []
+    cumul_non_cumule.append(cumul_test_tot)
+    
     cumul=0
+    cumul_freeze = 0
+    plot_cumul_freeze = []
     with tqdm.trange(MAX_ITER) as progress_bar:
         for it in progress_bar:
             cumul = cumul+sample_trajectory(replay_memory, Q_value, epsilon)
@@ -121,24 +130,35 @@ def train():
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
-                cumul_test_tot += sample_trajectory([], Q_value, 0)
+                """
+                cumul_opti = sample_trajectory([], Q_value, 0)
+                cumul_test_tot += cumul_opti
                 cumul_test.append(cumul_test_tot)
+                cumul_non_cumule.append(cumul_opti)
+                """
+                cumul_freeze += sample_trajectory([], Q_value, 0)
                 plot_tot_loss.append(tot_loss / (n // BATCH_SIZE))
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
 
             if it % FREEZE_PERIOD == FREEZE_PERIOD - 1:
+                cumul_opti = sample_trajectory([], Q_value, 0)
+                cumul_test_tot += cumul_opti
+                cumul_test.append(cumul_test_tot)
+                cumul_non_cumule.append(cumul_opti)
+                plot_cumul_freeze.append(cumul_freeze/FREEZE_PERIOD)
+                cumul_freeze = 0
                 temp = target_Q_value.state_dict()
                 target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
                 Q_value.load_state_dict(temp)
 
-            epsilon = 1 - (it / MAX_ITER) # pas optimisé
+            epsilon = calculate_epsilon(it)
 
-    return plot_tot_loss, plot_cumul, cumul_test
-
-
+    return plot_tot_loss, plot_cumul, cumul_test, cumul_non_cumule, plot_cumul_freeze
 
 
-plot_tot_loss, plot_cumul, cumul_test = train()
+
+
+plot_tot_loss, plot_cumul, cumul_test, cumul_non_cumule, plot_cumul_freeze = train()
 #print("plot_tot_loss", plot_tot_loss)
 plt.figure()
 plt.plot(plot_tot_loss)
@@ -149,3 +169,9 @@ plt.savefig("Cumul_neural_network.png")
 plt.figure()
 plt.plot(cumul_test)
 plt.savefig("cumul test.png")
+plt.figure()
+plt.plot(cumul_non_cumule)
+plt.savefig("cumul non cumule.png")
+plt.figure()
+plt.plot(plot_cumul_freeze)
+plt.savefig("cumul_moyen_epoch.png")
