@@ -76,6 +76,8 @@ def train():
     epsilon = 1
     plot_tot_loss = []
     plot_cumul=[]
+    cumul_test=[]
+    cumul_test.append(sample_trajectory([], Q_value, 0))
     cumul=0
     with tqdm.trange(MAX_ITER) as progress_bar:
         for it in progress_bar:
@@ -118,6 +120,7 @@ def train():
                     optim.zero_grad()
                     loss.backward()
                     optim.step()
+                cumul_test.append(sample_trajectory([], Q_value, 0))
                 plot_tot_loss.append(tot_loss / (n // BATCH_SIZE))
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
 
@@ -128,14 +131,17 @@ def train():
 
             epsilon = 1 - (it / MAX_ITER) # pas optimisé
 
-    return plot_tot_loss, plot_cumul
+    return plot_tot_loss, plot_cumul, cumul_test
 
 
 
 
-plot_tot_loss, plot_cumul = train()
+plot_tot_loss, plot_cumul, cumul_test = train()
 #print("plot_tot_loss", plot_tot_loss)
 plt.plot(plot_tot_loss)
 plt.savefig("Loss_neural_network.png")
 plt.plot(plot_cumul)
 plt.savefig("Cumul_neural_network.png")
+figure()
+plt.plot(cumul_test)
+plt.savefig("cumul test.png")
