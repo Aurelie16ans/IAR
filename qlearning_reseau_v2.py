@@ -8,10 +8,10 @@ from matplotlib import pyplot as plt
 
 MEM_SIZE = 1000
 T_MAX = 200
-HIDDEN_DIM = 128
-MAX_ITER = 10000
+HIDDEN_DIM = 64
+MAX_ITER = 5000
 BATCH_SIZE = 32
-DISCOUNT = 0.9
+DISCOUNT = 0.8
 LEARNING_RATE = 0.0001
 FREEZE_PERIOD = 100 # epoch
 
@@ -77,6 +77,7 @@ def train():
     plot_tot_loss = []
     plot_cumul=[]
     cumul_test=[]
+    plot_cumul_test = []
     cumul_test.append(sample_trajectory([], Q_value, 0))
     cumul_test_tot = 0
     cumul=0
@@ -133,7 +134,7 @@ def train():
 
             epsilon = 1 - (it / MAX_ITER) # pas optimisé
 
-    return plot_tot_loss, plot_cumul, cumul_test
+    return plot_tot_loss, plot_cumul, plot_cumul_test
 
 
 
