@@ -1,4 +1,4 @@
-from gridworld import GridWorld
+from gridworld_maj import GridWorld
 import collections
 import random
 import torch
@@ -11,7 +11,7 @@ import torch.nn.functional as F
 MEM_SIZE = 1000
 T_MAX = 50
 HIDDEN_DIM = 5
-MAX_ITER = 10000
+MAX_ITER = 100
 BATCH_SIZE = 32
 DISCOUNT = 0.9
 LEARNING_RATE = 0.0001
@@ -31,66 +31,78 @@ class Perceptron(nn.Module):
 
 class CNNModel(nn.Module):
 
-    def __init__(self,observation_space_size, hidden_dim, action_space_size, img_width, img_height, second_hidden_dim=16, third_hidden_dim = 120, conv_size=3):
+    def __init__(self, action_space_size, img_width, img_height):
         super(CNNModel, self).__init__()
-        self.conv1 = nn.Conv2d(1, hidden_dim, conv_size)
-        self.conv2 = nn.Conv2d(hidden_dim, second_hidden_dim, conv_size)
-        self.fc1 = nn.Linear(img_width * img_height * second_hidden_dim, third_hidden_dim)
-        self.fc2 = nn.Linear(third_hidden_dim, action_space_size)
-        self.img_size = img_width * img_height
-        self.scnd_dim = second_hidden_dim
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=2, stride=2)
+        self.bn1 = nn.BatchNorm2d(16)
+        #self.conv2 = nn.Conv2d(16, 32, kernel_size=2, stride=2)
+        #self.bn2 = nn.BatchNorm2d(32)
+        #self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)    #image trop petite
+        #self.bn3 = nn.BatchNorm2d(32)
+
+        # Number of Linear input connections depends on output of conv2d layers
+        # and therefore the input image size, so compute it.
+        def conv2d_size_out(size, kernel_size=2, stride=2):
+            return (size - (kernel_size - 1) - 1) // stride + 1
+
+        convw = conv2d_size_out(img_width) #a modif selon le nbre de conv   conv2d_size_out(conv2d_size_out(img_width)) etc
+        convh =conv2d_size_out(img_height)
+        linear_input_size = convw * convh * 16
+        self.head = nn.Linear(linear_input_size, action_space_size)
 
     def forward(self, x):
-        x = self.conv1(x)
+        x=self.conv1(x)
+        x=self.bn1(x)
         x = F.relu(x)
-        x = F.max_pool2d(x, 2, 2)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, self.img_size * self.scnd_dim)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        #x = F.relu(self.bn2(self.conv2(x)))
+        #x = F.relu(self.bn3(self.conv3(x)))
+        #print(x.shape)
+        #return self.head(x)
+        return self.head(x.view(x.size(0), -1))
 
 width = 4
 height = 4
 g=GridWorld(width,height)
 g.add_start(1,1)
 g.add_goal(3,3)
-n_s = g.state_space_size
-n_a = g.action_space_size
+n_a = 4
 s = g.reset()
 
 #Q_value = Perceptron(1, HIDDEN_DIM, n_a)
 #target_Q_value = Perceptron(1, HIDDEN_DIM, n_a)
-Q_value = CNNModel(1, HIDDEN_DIM, n_a, width+2, height+2)
-target_Q_value = CNNModel(1, HIDDEN_DIM, n_a, width+2, height+2)
+Q_value = CNNModel(n_a, width+2, height+2)
+target_Q_value = CNNModel(n_a, width+2, height+2)
 target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
 
 optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
+
+def get_screen(env):
+    screen=env.full_observation()
+    return screen
 
 
 def calculate_epsilon(it):
     return (-np.arctan(20*(it-MAX_ITER/2)/MAX_ITER)+1.5)/3
     
-def sample_action(env, z, Q_value, epsilon):
-    print("z ",z)
+def sample_action(env, screen, Q_value, epsilon):
     if random.random() < epsilon:
         return random.randint(0,n_a-1)
     else:
-        return Q_value(torch.tensor(z, dtype=torch.float).unsqueeze(0)).argmax().item() # renvoit une action aleatoire
+        return Q_value(screen.unsqueeze(0).unsqueeze(0).float()).argmax().item() # renvoit une action aleatoire
 
 
 def sample_trajectory(replay_memory, Q_value, epsilon):
     z = g.reset() #observation
+    screen=get_screen(g)
     cumul = 0
     for t in range(T_MAX):
-        a = sample_action(g, z, Q_value, epsilon)
+        a = sample_action(g, screen, Q_value, epsilon)
         next_z, r, done = g.step(a)
+        next_screen=get_screen(g)
         cumul += r
-        replay_memory.append((z,a,r,next_z,done))
+        replay_memory.append((screen,a,r,next_screen,done))
         z=next_z
+        screen=next_screen
         if done:
             break
     return cumul
@@ -116,10 +128,11 @@ def train():
                     batch_z, batch_a, batch_r, batch_nxt, batch_done = zip(
                             *(replay_memory[i] for i in indices[b * BATCH_SIZE:(b+1) * BATCH_SIZE]))
 
-                    batch_z = torch.tensor(batch_z).float().unsqueeze(1)
+                    batch_z = torch.stack(batch_z).float().unsqueeze(1)
                     batch_a = torch.tensor(batch_a).unsqueeze(1)
                     batch_r = torch.tensor(batch_r).unsqueeze(1).float()
-                    batch_nxt = torch.tensor(batch_nxt).unsqueeze(1).float()
+                    batch_nxt = torch.stack(batch_nxt).float().unsqueeze(1)
+                    #print("shape", batch_nxt.shape)
                     batch_done = torch.tensor(batch_done).unsqueeze(1)
 
                     batch_target = batch_r + DISCOUNT*target_Q_value(batch_nxt).max(1, keepdim=True)[0]
