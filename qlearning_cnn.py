@@ -144,7 +144,7 @@ def train(g):
                     loss.backward()
                     optim.step()
 
-                cumul_reward_epoch += sample_trajectory([], Q_value, 0)
+                cumul_reward_epoch += sample_trajectory([], Q_value, 0,g)
                 plot_tot_loss.append(tot_loss / (n // BATCH_SIZE))
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
             if it % FREEZE_PERIOD == FREEZE_PERIOD - 1:
@@ -170,8 +170,6 @@ for _ in range(3):
     h.add_start(1,1)
     h.add_goal(3,3)
     n_a = 4
-    width += 1
-    height += 1
     s = h.reset()
 
     Q_value = CNNModel(n_a, width+2, height+2)
@@ -180,6 +178,8 @@ for _ in range(3):
     optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
 
     plot_tot_loss, average_reward_epoch = train(h)
+    width += 1
+    height += 1
 
 
     # plot loss
