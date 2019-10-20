@@ -11,11 +11,11 @@ import torch.nn.functional as F
 MEM_SIZE = 1000
 T_MAX = 50
 HIDDEN_DIM = 5
-MAX_ITER = 100
+MAX_ITER = 500
 BATCH_SIZE = 32
 DISCOUNT = 0.9
 LEARNING_RATE = 0.0001
-FREEZE_PERIOD = 100 # epoch
+FREEZE_PERIOD = 50 # epoch
 
 
 class Perceptron(nn.Module):
@@ -59,22 +59,20 @@ class CNNModel(nn.Module):
         #print(x.shape)
         #return self.head(x)
         return self.head(x.view(x.size(0), -1))
-
-width = 4
-height = 4
+"""
+width = 3
+height = 3
 g=GridWorld(width,height)
 g.add_start(1,1)
 g.add_goal(3,3)
 n_a = 4
 s = g.reset()
+"""
+
 
 #Q_value = Perceptron(1, HIDDEN_DIM, n_a)
 #target_Q_value = Perceptron(1, HIDDEN_DIM, n_a)
-Q_value = CNNModel(n_a, width+2, height+2)
-target_Q_value = CNNModel(n_a, width+2, height+2)
-target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
 
-optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
 
 def get_screen(env):
     screen=env.full_observation()
@@ -83,7 +81,7 @@ def get_screen(env):
 
 def calculate_epsilon(it):
     return (-np.arctan(20*(it-MAX_ITER/2)/MAX_ITER)+1.5)/3
-    
+
 def sample_action(env, screen, Q_value, epsilon):
     if random.random() < epsilon:
         return random.randint(0,n_a-1)
@@ -91,7 +89,7 @@ def sample_action(env, screen, Q_value, epsilon):
         return Q_value(screen.unsqueeze(0).unsqueeze(0).float()).argmax().item() # renvoit une action aleatoire
 
 
-def sample_trajectory(replay_memory, Q_value, epsilon):
+def sample_trajectory(replay_memory, Q_value, epsilon, g):
     z = g.reset() #observation
     screen=get_screen(g)
     cumul = 0
@@ -107,7 +105,7 @@ def sample_trajectory(replay_memory, Q_value, epsilon):
             break
     return cumul
 
-def train():
+def train(g):
     replay_memory = collections.deque(maxlen=MEM_SIZE)
     epsilon = 1
     plot_tot_loss = []
@@ -117,7 +115,7 @@ def train():
     cumul = 0
     with tqdm.trange(MAX_ITER) as progress_bar:
         for it in progress_bar:
-            cumul = cumul+sample_trajectory(replay_memory, Q_value, epsilon)
+            cumul = cumul+sample_trajectory(replay_memory, Q_value, epsilon, g)
             n = len(replay_memory)
 
             if  n >BATCH_SIZE:
@@ -149,9 +147,9 @@ def train():
                 cumul_reward_epoch += sample_trajectory([], Q_value, 0)
                 plot_tot_loss.append(tot_loss / (n // BATCH_SIZE))
                 progress_bar.set_postfix(loss = tot_loss / (n // BATCH_SIZE), cumul=cumul)
-
             if it % FREEZE_PERIOD == FREEZE_PERIOD - 1:
                 average_reward_epoch.append(cumul_reward_epoch/FREEZE_PERIOD)
+                print("average reward per epoch", average_reward_epoch)
                 cumul_reward_epoch = 0
                 temp = target_Q_value.state_dict()
                 target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
@@ -162,16 +160,34 @@ def train():
     return plot_tot_loss, average_reward_epoch
 
 
-
 # training
-plot_tot_loss, average_reward_epoch = train()
+width = 3
+height = 3
+grid_tab = []
 
-# plot loss
-plt.figure()
-plt.plot(plot_tot_loss)
-plt.savefig("Loss_neural_network.png")
+for _ in range(3):
+    h=GridWorld(width, height)
+    h.add_start(1,1)
+    h.add_goal(3,3)
+    n_a = 4
+    width += 1
+    height += 1
+    s = h.reset()
 
-# plot average_reward
-plt.figure()
-plt.plot(average_reward_epoch)
-plt.savefig("average_reward_per_epoch.png")
+    Q_value = CNNModel(n_a, width+2, height+2)
+    target_Q_value = CNNModel(n_a, width+2, height+2)
+    target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
+    optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
+
+    plot_tot_loss, average_reward_epoch = train(h)
+
+
+    # plot loss
+    plt.figure()
+    plt.plot(plot_tot_loss)
+    plt.savefig("Loss_neural_network.png")
+
+    # plot average_reward
+    plt.figure()
+    plt.plot(average_reward_epoch)
+    plt.savefig("average_reward_per_epoch.png")
