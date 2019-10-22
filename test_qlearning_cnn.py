@@ -11,6 +11,12 @@ from cnn_model import CNNModel
 
 T_MAX = 200
 
+def sample_action(env, screen, Q_value, epsilon):
+    if random.random() < epsilon:
+        return random.randint(0,n_a-1)
+    else:
+        return Q_value(screen.unsqueeze(0).unsqueeze(0).float()).argmax().item() # renvoit une action aleatoire
+
 def create_random_griworld(width,height):
     h = GridWorld(width, height)
     #wall (none, one horizontal or one vertical)
@@ -56,7 +62,7 @@ def run_cnn(Q_value, g):
     screen = g.full_observation()
     cumul = 0
     for t in range(T_MAX):
-        a = Q_value(screen.unsqueeze(0).unsqueeze(0).float()).argmax().item()
+        a = sample_action(g, screen, Q_value, 0.1)
         next_z, r, done = g.step(a)
         next_screen = g.full_observation()
         cumul += r
@@ -71,12 +77,13 @@ size_gridworld=random.randint(3,5)
 print("Gridworld {} x {}".format(size_gridworld,size_gridworld))
 
 
-h = create_random_griworld(size_gridworld,size_gridworld)
+#h = create_random_griworld(size_gridworld,size_gridworld)
+h = create_random_griworld(3,3)
 n_a = 4
 s = h.reset()
 print(h)
 
-Q_value = CNNModel(n_a, size_gridworld+2,size_gridworld+2)
-Q_value.load_state_dict(torch.load("cnn_{}x{}.pt".format(size_gridworld,size_gridworld)).state_dict())
+Q_value = CNNModel(n_a, size_gridworld+2)
+Q_value.load_state_dict(torch.load("cnn_v2_{}x{}.pt".format(size_gridworld,size_gridworld)).state_dict())
 reward = run_cnn(Q_value, h)
 print(reward)

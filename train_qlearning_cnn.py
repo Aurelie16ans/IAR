@@ -9,9 +9,9 @@ import numpy as np
 from cnn_model import CNNModel
 
 MEM_SIZE = 1000
-T_MAX = 50
+T_MAX = 100
 HIDDEN_DIM = 5
-MAX_ITER = 500
+MAX_ITER = 1000
 BATCH_SIZE = 32
 DISCOUNT = 0.9
 LEARNING_RATE = 0.0001
@@ -50,7 +50,7 @@ def sample_trajectory(replay_memory, Q_value, epsilon, g):
 
 def train(g):
     replay_memory = collections.deque(maxlen=MEM_SIZE)
-    epsilon = 0.01
+    epsilon = 0.1
     plot_tot_loss = []
 
     cumul_reward_epoch = 0
@@ -143,7 +143,7 @@ def create_random_griworld(width,height):
     h.add_goal(end_w,end_h)
     return h 
 
-for _ in tqdm.trange(2): #train on 50 different grid for each grid size
+for _ in tqdm.trange(1): #train on 50 different grid for each grid size
     # training
     width = 3
     height = 3
@@ -154,15 +154,17 @@ for _ in tqdm.trange(2): #train on 50 different grid for each grid size
         n_a = 4
         s = h.reset()
     
-        Q_value = CNNModel(n_a, width+2, height+2)
+        #Q_value = CNNModel(n_a, width+2, height+2)
+        Q_value = CNNModel(n_a, width+2)
         #load the q value calculated before
-        Q_value.load_state_dict(torch.load("cnn_{}x{}.pt".format(width,height)).state_dict())
-        target_Q_value = CNNModel(n_a, width+2, height+2)
+        Q_value.load_state_dict(torch.load("cnn_v2_{}x{}.pt".format(width,height)).state_dict())
+        #target_Q_value = CNNModel(n_a, width+2, height+2)
+        target_Q_value = CNNModel(n_a, width+2)
         target_Q_value.load_state_dict(Q_value.state_dict()) # copie des param
         optim = torch.optim.SGD(Q_value.parameters(),lr=LEARNING_RATE)
         
         plot_tot_loss, average_reward_epoch = train(h)
-        torch.save(Q_value,"cnn_{}x{}.pt".format(width,height))
+        torch.save(Q_value,"cnn_v2_{}x{}.pt".format(width,height))
         width += 1
         height += 1
     
@@ -170,9 +172,9 @@ for _ in tqdm.trange(2): #train on 50 different grid for each grid size
         # plot loss
         plt.figure()
         plt.plot(plot_tot_loss)
-        plt.savefig("Loss_neural_network_{}x{}.png".format(width-1,height-1))
+        plt.savefig("Loss_neural_network_v2_{}x{}.png".format(width-1,height-1))
     
         # plot average_reward
         plt.figure()
         plt.plot(average_reward_epoch)
-        plt.savefig("average_reward_per_epoch_{}x{}.png".format(width-1,height-1))
+        plt.savefig("average_reward_per_epoch_v2_{}x{}.png".format(width-1,height-1))
